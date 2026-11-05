@@ -3,8 +3,34 @@
 #include "user/user.h"
 #include "kernel/fs.h"
 #include "kernel/fcntl.h"
+#include "kernel/param.h"
 
-void find(char *path, char *name){
+void run(char **cmd, char *path){
+	char *args[MAXARG];
+	int i = 0;
+
+	while(cmd[i] != 0 && i < MAXARG - 2){
+		args[i] = cmd[i];
+		i++;
+	}
+	
+	args[i++] = path;
+	args[i] = 0;
+
+	int pid = fork();
+	if(pid < 0){
+		fprintf(2, "find: fork failed\n");
+		return;
+	}
+	if(pid == 0){
+		exec(args[0], args);
+		fprintf(2, "find: exec %s failed\n", args[0]);
+		exit(1);
+	}
+	wait(0);
+}
+
+void find(char *path, char *name, char **cmd){
 	char buf[512], *p;
 	int fd;
 	struct dirent de;
@@ -52,20 +78,30 @@ void find(char *path, char *name){
       		continue;
     	}
 
-    	if(strcmp(p, name) == 0)         
-      		printf("%s\n", buf);
+    	if(strcmp(p, name) == 0){         
+      		if(cmd == 0)
+				printf("%s\n", buf);
+			else 
+				run(cmd, buf);
+		}
 
     	if(st.type == T_DIR)         
-      		find(buf, name);
+      		find(buf, name, cmd);
 	}
 	close(fd);
 }
 
 int main(int argc, char *argv[]){
-	if(argc != 3){
-		fprintf(2, "usage: find dir name\n");
+	if(argc == 3){
+		find(argv[1], argv[2], 0);
+	}
+	else if(argc >= 5 && strcmp(argv[3], "-exec") == 0){
+		find(argv[1], argv[2], &argv[4]);
+	}
+	else{
+		fprintf(2, "usage: find dir name [-exec cmd ...]\n");
 		exit(1);
 	}
-	find(argv[1], argv[2]);
 	exit(0);
 }
+
